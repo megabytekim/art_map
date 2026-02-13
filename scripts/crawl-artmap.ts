@@ -13,6 +13,84 @@ interface RawExhibition {
   startDate: string;
   endDate: string;
   thumbnail: string;
+  blogCount: number | null;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function extractSearchTitle(title: string): string {
+  let cleaned = title.replace(/[《》〈〉<>≪≫〔〕【】『』「」()]/g, " ").replace(/\s+/g, " ").trim();
+  cleaned = cleaned.replace(/\s+(개인전|단체전|특별전|기획전|상설전|소장품전|회고전|초대전|귀국전)$/, "").trim();
+  const separators = [" : ", ": ", ", ", " - "];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const sep of separators) {
+      const idx = cleaned.indexOf(sep);
+      if (idx > 0) {
+        const before = cleaned.slice(0, idx).trim();
+        const after = cleaned.slice(idx + sep.length).trim();
+        const candidate = after.length >= before.length ? after : before;
+        if (candidate.length <= 4) continue;
+        cleaned = candidate;
+        changed = true;
+        break;
+      }
+    }
+  }
+  return cleaned;
+}
+
+function buildQuery(searchTitle: string, shortPlace: string): string {
+  const hasLatin = /[a-zA-Z]{2,}/.test(searchTitle);
+  const hasKorean = /[가-힣]{2,}/.test(searchTitle);
+
+  let titlePart: string;
+  if (hasLatin && hasKorean) {
+    const parts = searchTitle
+      .split(/(?<=[a-zA-Z])\s+(?=[가-힣])|(?<=[가-힣])\s+(?=[a-zA-Z])/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 1);
+    titlePart = parts.map((p) => `"${p}"`).join(" ");
+  } else {
+    titlePart = `"${searchTitle}"`;
+  }
+
+  return shortPlace ? `${titlePart} ${shortPlace}` : titlePart;
+}
+
+async function fetchBlogCount(title: string, place: string, retries = 3): Promise<number | null> {
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const searchTitle = extractSearchTitle(title);
+  const shortPlace = place ? place.split(" ")[0] : "";
+  const query = buildQuery(searchTitle, shortPlace);
+  const url = new URL("https://openapi.naver.com/v1/search/blog.json");
+  url.searchParams.set("query", query);
+  url.searchParams.set("display", "1");
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        headers: {
+          "X-Naver-Client-Id": clientId,
+          "X-Naver-Client-Secret": clientSecret,
+        },
+      });
+      if (res.status === 429) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.total ?? 0;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 async function main() {
@@ -152,6 +230,7 @@ async function main() {
                 ? item.thumbnail
                 : `https://art-map.co.kr${item.thumbnail}`
               : "",
+            blogCount: null,
           } as RawExhibition;
         } catch (e) {
           console.error(`  Failed: ${item.title}`, (e as Error).message);
@@ -169,6 +248,16 @@ async function main() {
   }
 
   await browser.close();
+
+  // 3. Fetch blog counts from Naver API (sequential to avoid 429)
+  console.log("\nFetching blog counts...");
+  for (let i = 0; i < results.length; i++) {
+    results[i].blogCount = await fetchBlogCount(results[i].title, results[i].place);
+    if ((i + 1) % 10 === 0 || i === results.length - 1) {
+      console.log(`  Blog counts: ${i + 1}/${results.length}`);
+    }
+    await sleep(100);
+  }
 
   // Filter: only with GPS coordinates
   const withCoords = results.filter((r) => r.lat !== 0 && r.lng !== 0);

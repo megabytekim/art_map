@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Exhibition } from "@/lib/types";
 import ExhibitionPanel from "@/components/ExhibitionPanel";
@@ -14,33 +14,13 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
 
-  const fetchBlogCounts = useCallback(async (exs: Exhibition[]) => {
-    const updated = [...exs];
-
-    const batchSize = 5;
-    for (let i = 0; i < updated.length; i += batchSize) {
-      const batch = updated.slice(i, i + batchSize);
-      const results = await Promise.all(
-        batch.map(async (ex) => {
-          try {
-            const params = new URLSearchParams({ title: ex.title });
-            if (ex.place) params.set("place", ex.place);
-            const res = await fetch(`/api/blog-count?${params}`);
-            const data = await res.json();
-            return data.total as number | null;
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      results.forEach((count, idx) => {
-        updated[i + idx] = { ...updated[i + idx], blogCount: count };
-      });
-
-      setExhibitions([...updated]);
+  // 모바일: 목록에서 전시 선택 시 자동으로 지도 뷰로 전환
+  const handleSelect = (id: string) => {
+    setSelectedId(id);
+    if (window.innerWidth < 768) {
+      setPanelOpen(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     async function load() {
@@ -49,25 +29,21 @@ export default function Home() {
         const res = await fetch("/api/exhibitions");
         const data: Exhibition[] = await res.json();
         setExhibitions(data);
-        setLoading(false);
-
-        const needsBlogCount = data.some((e) => e.blogCount === null);
-        if (needsBlogCount) {
-          fetchBlogCounts(data);
-        }
       } catch {
+        // ignore
+      } finally {
         setLoading(false);
       }
     }
     load();
-  }, [fetchBlogCounts]);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0 z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">ART MAP</h1>
+          <h1 className="text-xl font-bold text-gray-900">무하한</h1>
           <p className="text-xs text-gray-500">서울 전시 지도 + 블로그 인기도</p>
         </div>
         <button
@@ -89,7 +65,7 @@ export default function Home() {
           <ExhibitionPanel
             exhibitions={exhibitions}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={handleSelect}
             loading={loading}
           />
         </div>
@@ -103,7 +79,7 @@ export default function Home() {
           <Map
             exhibitions={exhibitions}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={handleSelect}
           />
           <Legend />
         </div>

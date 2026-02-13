@@ -23,6 +23,28 @@ function FitBounds({ exhibitions }: { exhibitions: Exhibition[] }) {
   return null;
 }
 
+function FlyToSelected({ exhibitions, selectedId }: { exhibitions: Exhibition[]; selectedId: string | null }) {
+  const map = useMap();
+  const prevId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedId || selectedId === prevId.current) return;
+    prevId.current = selectedId;
+    const ex = exhibitions.find((e) => e.id === selectedId);
+    if (!ex) return;
+
+    // 이미 보이는 위치면 flyTo 스킵
+    const point = map.latLngToContainerPoint([ex.lat, ex.lng]);
+    const size = map.getSize();
+    if (point.x >= 0 && point.x <= size.x && point.y >= 0 && point.y <= size.y && map.getZoom() >= 14) {
+      return;
+    }
+    map.flyTo([ex.lat, ex.lng], 15, { duration: 0.8 });
+  }, [map, exhibitions, selectedId]);
+
+  return null;
+}
+
 interface MapProps {
   exhibitions: Exhibition[];
   selectedId: string | null;
@@ -38,10 +60,11 @@ export default function Map({ exhibitions, selectedId, onSelect }: MapProps) {
       zoomControl={false}
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.vworld.kr/">VWorld</a>'
+        url={`https://api.vworld.kr/req/wmts/1.0.0/${process.env.NEXT_PUBLIC_VWORLD_API_KEY}/Base/{z}/{y}/{x}.png`}
       />
       <FitBounds exhibitions={exhibitions} />
+      <FlyToSelected exhibitions={exhibitions} selectedId={selectedId} />
       {exhibitions.map((ex) => {
         const level = getPopularityLevel(ex.blogCount);
         const color = getPopularityColor(level);

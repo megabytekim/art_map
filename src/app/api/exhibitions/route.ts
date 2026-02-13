@@ -2,23 +2,27 @@ import { NextResponse } from "next/server";
 import { Exhibition } from "@/lib/types";
 import exhibitionsData from "@/lib/exhibitions-data.json";
 
-export async function GET() {
-  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+interface RawExhibition {
+  id: string;
+  title: string;
+  place: string;
+  address: string;
+  lat: number;
+  lng: number;
+  startDate: string;
+  endDate: string;
+  thumbnail: string;
+  blogCount: number | null;
+}
 
-  const exhibitions: Exhibition[] = exhibitionsData
+export async function GET() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const exhibitions: Exhibition[] = (exhibitionsData as RawExhibition[])
     .filter((item) => !item.endDate || item.endDate >= today)
     .map((item) => ({
-      id: item.id,
-      title: item.title,
-      place: item.place,
-      address: item.address,
-      lat: item.lat,
-      lng: item.lng,
-      startDate: item.startDate,
-      endDate: item.endDate,
-      thumbnail: item.thumbnail,
+      ...item,
       category: "전시",
-      blogCount: null,
     }));
 
   return NextResponse.json(exhibitions);
