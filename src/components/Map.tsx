@@ -6,6 +6,17 @@ import L from "leaflet";
 import { Exhibition, getPopularityLevel, getPopularityColor } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 
+function InvalidateOnVisible() {
+  const map = useMap();
+
+  useEffect(() => {
+    const timer = setTimeout(() => map.invalidateSize(), 100);
+    return () => clearTimeout(timer);
+  });
+
+  return null;
+}
+
 function FitBounds({ exhibitions }: { exhibitions: Exhibition[] }) {
   const map = useMap();
   const fitted = useRef(false);
@@ -63,6 +74,7 @@ export default function Map({ exhibitions, selectedId, onSelect }: MapProps) {
         attribution='&copy; <a href="https://www.vworld.kr/">VWorld</a>'
         url={`https://api.vworld.kr/req/wmts/1.0.0/${process.env.NEXT_PUBLIC_VWORLD_API_KEY}/Base/{z}/{y}/{x}.png`}
       />
+      <InvalidateOnVisible />
       <FitBounds exhibitions={exhibitions} />
       <FlyToSelected exhibitions={exhibitions} selectedId={selectedId} />
       {exhibitions.map((ex) => {
