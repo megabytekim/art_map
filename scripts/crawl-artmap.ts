@@ -233,7 +233,7 @@ async function main() {
             blogCount: null,
           } as RawExhibition;
         } catch (e) {
-          console.error(`  Failed: ${item.title}`, (e as Error).message);
+          console.error(`  Failed: idx=${item.idx}`, (e as Error).message);
           return null;
         } finally {
           await detailPage.close();
