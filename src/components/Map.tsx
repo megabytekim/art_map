@@ -6,49 +6,45 @@ import L from "leaflet";
 import { Exhibition, getPopularityLevel, getPopularityColor } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 
-function InvalidateOnVisible() {
-  const map = useMap();
-
-  useEffect(() => {
-    const timer = setTimeout(() => map.invalidateSize(), 100);
-    return () => clearTimeout(timer);
-  });
-
-  return null;
-}
-
-function FitBounds({ exhibitions }: { exhibitions: Exhibition[] }) {
+function MapController({ exhibitions, selectedId }: { exhibitions: Exhibition[]; selectedId: string | null }) {
   const map = useMap();
   const fitted = useRef(false);
+  const prevId = useRef<string | null>(null);
 
+  // 컨테이너 사이즈 변경 감지 → invalidateSize
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+
+  // 초기 로드: 전체 전시 범위로 맞추기
   useEffect(() => {
     if (exhibitions.length === 0 || fitted.current) return;
-
-    const bounds = L.latLngBounds(
-      exhibitions.map((e) => L.latLng(e.lat, e.lng))
-    );
+    const size = map.getSize();
+    if (size.x === 0 || size.y === 0) return; // 아직 보이지 않음
+    const bounds = L.latLngBounds(exhibitions.map((e) => L.latLng(e.lat, e.lng)));
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
     fitted.current = true;
   }, [map, exhibitions]);
 
-  return null;
-}
-
-function FlyToSelected({ exhibitions, selectedId }: { exhibitions: Exhibition[]; selectedId: string | null }) {
-  const map = useMap();
-  const prevId = useRef<string | null>(null);
-
+  // 전시 선택 시 해당 위치로 이동
   useEffect(() => {
     if (!selectedId || selectedId === prevId.current) return;
     prevId.current = selectedId;
     const ex = exhibitions.find((e) => e.id === selectedId);
     if (!ex) return;
-
-    // 이미 보이는 위치면 flyTo 스킵
-    const point = map.latLngToContainerPoint([ex.lat, ex.lng]);
     const size = map.getSize();
-    if (point.x >= 0 && point.x <= size.x && point.y >= 0 && point.y <= size.y && map.getZoom() >= 14) {
-      return;
+    if (size.x === 0 || size.y === 0) {
+      // 맵이 아직 hidden → visible 되면 이동
+      const onResize = () => {
+        map.flyTo([ex.lat, ex.lng], 15, { duration: 0.8 });
+        map.off("resize", onResize);
+      };
+      map.on("resize", onResize);
+      return () => { map.off("resize", onResize); };
     }
     map.flyTo([ex.lat, ex.lng], 15, { duration: 0.8 });
   }, [map, exhibitions, selectedId]);
@@ -65,18 +61,16 @@ interface MapProps {
 export default function Map({ exhibitions, selectedId, onSelect }: MapProps) {
   return (
     <MapContainer
-      center={[37.5665, 126.978]}
-      zoom={12}
+      center={[36.5, 127.5]}
+      zoom={7}
       className="h-full w-full"
       zoomControl={false}
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.vworld.kr/">VWorld</a>'
-        url={`https://api.vworld.kr/req/wmts/1.0.0/${process.env.NEXT_PUBLIC_VWORLD_API_KEY}/Base/{z}/{y}/{x}.png`}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       />
-      <InvalidateOnVisible />
-      <FitBounds exhibitions={exhibitions} />
-      <FlyToSelected exhibitions={exhibitions} selectedId={selectedId} />
+      <MapController exhibitions={exhibitions} selectedId={selectedId} />
       {exhibitions.map((ex) => {
         const level = getPopularityLevel(ex.blogCount);
         const color = getPopularityColor(level);
