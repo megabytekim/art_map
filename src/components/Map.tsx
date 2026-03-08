@@ -68,10 +68,22 @@ function MapController({
     prevId.current = selectedId;
     const ex = exhibitions.find((e) => e.id === selectedId);
     if (!ex) return;
+
+    // Offset the target so the marker appears above the slide-up card
+    // Card covers roughly the bottom 40% of the map on mobile
+    const flyToWithOffset = () => {
+      const size = map.getSize();
+      const targetPoint = map.project([ex.lat, ex.lng], 15);
+      const offsetY = size.y * 0.2; // shift marker to upper portion
+      const offsetPoint = L.point(targetPoint.x, targetPoint.y + offsetY);
+      const offsetLatLng = map.unproject(offsetPoint, 15);
+      map.flyTo(offsetLatLng, 15, { duration: 0.8 });
+    };
+
     const size = map.getSize();
     if (size.x === 0 || size.y === 0) {
       const onResize = () => {
-        map.flyTo([ex.lat, ex.lng], 15, { duration: 0.8 });
+        flyToWithOffset();
         map.off("resize", onResize);
       };
       map.on("resize", onResize);
@@ -79,7 +91,7 @@ function MapController({
         map.off("resize", onResize);
       };
     }
-    map.flyTo([ex.lat, ex.lng], 15, { duration: 0.8 });
+    flyToWithOffset();
   }, [map, exhibitions, selectedId]);
 
   return null;
