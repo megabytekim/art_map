@@ -64,17 +64,22 @@ export default function SlideUpCard({ exhibition, onClose }: Props) {
 
         {/* Header - always visible */}
         <div className="px-4 pb-3">
-          <div className="flex items-start gap-3">
-            {/* Representative image */}
-            {exhibition.imageUrl ? (
-              <img
-                src={exhibition.imageUrl}
-                alt={exhibition.title}
-                className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            ) : null}
+          {/* Image gallery - horizontal scroll */}
+          {exhibition.imageUrls.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 -mx-4 px-4 scrollbar-hide">
+              {exhibition.imageUrls.map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt={`${exhibition.title} ${i + 1}`}
+                  className="w-24 h-24 rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ))}
+            </div>
+          )}
 
+          <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">

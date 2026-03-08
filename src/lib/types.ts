@@ -8,7 +8,7 @@ export interface Exhibition {
   startDate: string;
   endDate: string;
   thumbnail: string;
-  imageUrl: string;
+  imageUrls: string[];
   category: string;
   blogCount: number | null;
 }

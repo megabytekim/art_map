@@ -13,7 +13,7 @@ interface RawExhibition {
   startDate: string;
   endDate: string;
   thumbnail: string;
-  imageUrl: string;
+  imageUrls: string[];
   blogCount: number | null;
 }
 
@@ -116,10 +116,10 @@ async function geocodeKeyword(keyword: string, retries = 2): Promise<{ lat: numb
   return null;
 }
 
-async function fetchImageUrl(title: string, place: string): Promise<string> {
+async function fetchImageUrls(title: string, place: string): Promise<string[]> {
   const clientId = process.env.NAVER_CLIENT_ID;
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return "";
+  if (!clientId || !clientSecret) return [];
 
   const searchTitle = extractSearchTitle(title);
   const shortPlace = place ? place.split(" ")[0] : "";
@@ -128,7 +128,7 @@ async function fetchImageUrl(title: string, place: string): Promise<string> {
   try {
     const url = new URL("https://openapi.naver.com/v1/search/image.json");
     url.searchParams.set("query", query);
-    url.searchParams.set("display", "1");
+    url.searchParams.set("display", "10");
     url.searchParams.set("sort", "sim");
 
     const res = await fetch(url.toString(), {
@@ -137,15 +137,15 @@ async function fetchImageUrl(title: string, place: string): Promise<string> {
         "X-Naver-Client-Secret": clientSecret,
       },
     });
-    if (!res.ok) return "";
+    if (!res.ok) return [];
     const data = await res.json();
     if (data.items && data.items.length > 0) {
-      return data.items[0].thumbnail || "";
+      return data.items.map((item: { thumbnail?: string }) => item.thumbnail || "").filter(Boolean);
     }
   } catch {
     // ignore
   }
-  return "";
+  return [];
 }
 
 const RECENT_DAYS = 60;
@@ -359,7 +359,7 @@ async function main() {
                 ? item.thumbnail
                 : `https://art-map.co.kr${item.thumbnail}`
               : "",
-            imageUrl: "",
+            imageUrls: [],
             blogCount: null,
           } as RawExhibition;
         } catch (e) {
@@ -382,12 +382,12 @@ async function main() {
   // 3. Fetch blog counts + image URLs from Naver API (sequential to avoid 429)
   console.log("\nFetching blog counts + images...");
   for (let i = 0; i < results.length; i++) {
-    const [blogCount, imageUrl] = await Promise.all([
+    const [blogCount, imageUrls] = await Promise.all([
       fetchBlogCount(results[i].title, results[i].place),
-      fetchImageUrl(results[i].title, results[i].place),
+      fetchImageUrls(results[i].title, results[i].place),
     ]);
     results[i].blogCount = blogCount;
-    results[i].imageUrl = imageUrl;
+    results[i].imageUrls = imageUrls;
     if ((i + 1) % 10 === 0 || i === results.length - 1) {
       console.log(`  Progress: ${i + 1}/${results.length}`);
     }
