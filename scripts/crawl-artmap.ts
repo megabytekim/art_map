@@ -59,6 +59,62 @@ function buildQuery(searchTitle: string, shortPlace: string): string {
   return shortPlace ? `${titlePart} ${shortPlace}` : titlePart;
 }
 
+async function geocodeAddress(address: string, retries = 2): Promise<{ lat: number; lng: number } | null> {
+  const kakaoKey = process.env.KAKAO_REST_API_KEY;
+  if (!kakaoKey) return null;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const url = new URL("https://dapi.kakao.com/v2/local/search/address.json");
+      url.searchParams.set("query", address);
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `KakaoAK ${kakaoKey}` },
+      });
+      if (!res.ok) {
+        await sleep(500);
+        continue;
+      }
+      const data = await res.json();
+      if (data.documents && data.documents.length > 0) {
+        const doc = data.documents[0];
+        return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
+      }
+      return null;
+    } catch {
+      await sleep(500);
+    }
+  }
+  return null;
+}
+
+async function geocodeKeyword(keyword: string, retries = 2): Promise<{ lat: number; lng: number } | null> {
+  const kakaoKey = process.env.KAKAO_REST_API_KEY;
+  if (!kakaoKey) return null;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
+      url.searchParams.set("query", keyword);
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `KakaoAK ${kakaoKey}` },
+      });
+      if (!res.ok) {
+        await sleep(500);
+        continue;
+      }
+      const data = await res.json();
+      if (data.documents && data.documents.length > 0) {
+        const doc = data.documents[0];
+        return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
+      }
+      return null;
+    } catch {
+      await sleep(500);
+    }
+  }
+  return null;
+}
+
 const RECENT_DAYS = 60;
 
 async function fetchPage(
@@ -181,9 +237,9 @@ async function main() {
 
   console.log(`\nFound ${listItems.length} ongoing exhibitions`);
 
-  // 2. Visit each exhibition detail → get gallery link → get GPS
+  // 2. Visit each exhibition detail → extract address → geocode with Kakao
   const results: RawExhibition[] = [];
-  const galleryGpsCache: Record<string, { lat: number; lng: number; address: string }> = {};
+  const geocodeCache: Record<string, { lat: number; lng: number }> = {};
 
   const batchSize = 3;
   for (let i = 0; i < listItems.length; i += batchSize) {
@@ -192,23 +248,29 @@ async function main() {
       batch.map(async (item) => {
         const detailPage = await browser.newPage();
         try {
-          // Visit exhibition detail to get all info
           await detailPage.goto(
             `https://art-map.co.kr/exhibition/view.php?idx=${item.idx}`,
             { waitUntil: "domcontentloaded", timeout: 15000 }
           );
 
-          // Extract title, gallery link, place, dates all at once
           const detail = await detailPage.evaluate(() => {
-            // Title from page title: "전시명 (2026.02.13 - 2026.03.28)"
             const pageTitle = document.title.replace(/\s*\([\d.\s-]+\)\s*$/, "").trim();
 
-            // Gallery link and place name
             const galleryLink = document.querySelector('a[href*="gallery/view.php?idx="]');
-            const galleryIdx = galleryLink?.getAttribute("href")?.match(/idx=(\d+)/)?.[1] || null;
             const place = galleryLink?.textContent?.trim() || "";
 
-            // Dates from table cells
+            // Extract address from table row "주소 | ..."
+            let address = "";
+            const rows = [...document.querySelectorAll("tr")];
+            for (const row of rows) {
+              const th = row.querySelector("th");
+              if (th?.textContent?.includes("주소")) {
+                const td = row.querySelector("td");
+                address = td?.textContent?.trim() || "";
+                break;
+              }
+            }
+
             let startDate = "";
             let endDate = "";
             const cells = [...document.querySelectorAll("td")];
@@ -223,56 +285,40 @@ async function main() {
               }
             }
 
-            return { title: pageTitle, place, galleryIdx, startDate, endDate };
+            return { title: pageTitle, place, address, startDate, endDate };
           });
 
           const startDate = detail.startDate.replace(/\./g, "-");
           const endDate = detail.endDate.replace(/\./g, "-");
+          const placeName = detail.place.replace(/\/[^/]*$/, "").trim();
+          const address = detail.address;
 
-          // Get GPS from gallery page (with cache)
-          let gps = { lat: 0, lng: 0, address: "" };
-          if (detail.galleryIdx) {
-            if (galleryGpsCache[detail.galleryIdx]) {
-              gps = galleryGpsCache[detail.galleryIdx];
-            } else {
-              const galleryPage = await browser.newPage();
-              try {
-                await galleryPage.goto(
-                  `https://art-map.co.kr/gallery/view.php?idx=${detail.galleryIdx}`,
-                  { waitUntil: "domcontentloaded", timeout: 15000 }
-                );
-                const gpsData = await galleryPage.evaluate(() => {
-                  const html = document.documentElement.innerHTML;
-                  const match = html.match(
-                    /initMap\("([^"]+)","([^"]+)","([^"]*?)","([^"]*?)"/
-                  );
-                  if (match) {
-                    return {
-                      lat: parseFloat(match[1]),
-                      lng: parseFloat(match[2]),
-                      address: match[4].trim(),
-                    };
-                  }
-                  return { lat: 0, lng: 0, address: "" };
-                });
-                gps = gpsData;
-                galleryGpsCache[detail.galleryIdx] = gps;
-              } finally {
-                await galleryPage.close();
-              }
+          // Geocode: address → Kakao address search → place name keyword search
+          let lat = 0, lng = 0;
+          const cacheKey = address || placeName;
+          if (cacheKey && geocodeCache[cacheKey]) {
+            lat = geocodeCache[cacheKey].lat;
+            lng = geocodeCache[cacheKey].lng;
+          } else {
+            let coords: { lat: number; lng: number } | null = null;
+            // 1st: try address geocoding
+            if (address) coords = await geocodeAddress(address);
+            // 2nd fallback: keyword search with place name
+            if (!coords && placeName) coords = await geocodeKeyword(placeName);
+            if (coords) {
+              lat = coords.lat;
+              lng = coords.lng;
+              geocodeCache[cacheKey] = coords;
             }
           }
-
-          // Clean place name (remove "/서울" etc.)
-          const placeName = detail.place.replace(/\/[^/]*$/, "").trim();
 
           return {
             id: item.idx,
             title: detail.title,
             place: placeName,
-            address: gps.address || placeName,
-            lat: gps.lat,
-            lng: gps.lng,
+            address: address || placeName,
+            lat,
+            lng,
             startDate,
             endDate,
             thumbnail: item.thumbnail
