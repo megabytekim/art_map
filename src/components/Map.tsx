@@ -96,7 +96,10 @@ function ClusterLayer({
 }) {
   const map = useMap();
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersRef = useRef<globalThis.Map<string, L.Marker>>(new globalThis.Map());
+  const prevSelectedRef = useRef<string | null>(null);
 
+  // Build markers only when exhibitions change
   useEffect(() => {
     if (clusterRef.current) {
       map.removeLayer(clusterRef.current);
@@ -130,31 +133,60 @@ function ClusterLayer({
       },
     });
 
+    const newMarkers = new globalThis.Map<string, L.Marker>();
+
     for (const ex of exhibitions) {
       const level = getPopularityLevel(ex.blogCount);
       const color = getPopularityColor(level);
-      const isSelected = ex.id === selectedId;
       const radius =
         ex.blogCount !== null
           ? Math.min(6 + Math.sqrt(ex.blogCount) * 0.8, 20)
           : 6;
 
       const marker = L.marker([ex.lat, ex.lng], {
-        icon: createCircleIcon(color, isSelected ? radius + 3 : radius, isSelected),
+        icon: createCircleIcon(color, radius, false),
       });
       (marker as L.Marker & { _color?: string })._color = color;
+      (marker as L.Marker & { _radius?: number })._radius = radius;
 
       marker.on("click", () => onSelect(ex.id));
       cluster.addLayer(marker);
+      newMarkers.set(ex.id, marker);
     }
 
     map.addLayer(cluster);
     clusterRef.current = cluster;
+    markersRef.current = newMarkers;
+    prevSelectedRef.current = null;
 
     return () => {
       map.removeLayer(cluster);
     };
-  }, [map, exhibitions, selectedId, onSelect]);
+  }, [map, exhibitions, onSelect]);
+
+  // Update only the affected marker icons when selection changes
+  useEffect(() => {
+    const markers = markersRef.current;
+    const prev = prevSelectedRef.current;
+
+    // Deselect previous
+    if (prev && markers.has(prev)) {
+      const m = markers.get(prev)!;
+      const color = (m as L.Marker & { _color?: string })._color || "#9ca3af";
+      const radius = (m as L.Marker & { _radius?: number })._radius || 6;
+      m.setIcon(createCircleIcon(color, radius, false));
+    }
+
+    // Select new
+    if (selectedId && markers.has(selectedId)) {
+      const m = markers.get(selectedId)!;
+      const color = (m as L.Marker & { _color?: string })._color || "#9ca3af";
+      const radius = (m as L.Marker & { _radius?: number })._radius || 6;
+      m.setIcon(createCircleIcon(color, radius + 3, true));
+    }
+
+    prevSelectedRef.current = selectedId;
+  }, [selectedId]);
 
   return null;
 }

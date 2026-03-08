@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Exhibition, getPopularityLevel, getPopularityColor, isEndingSoon } from "@/lib/types";
 
 interface Props {
@@ -40,8 +40,9 @@ export default function ExhibitionPanel({
   onSelect,
   loading,
 }: Props) {
-  const sorted = [...exhibitions].sort(
-    (a, b) => (b.blogCount ?? -1) - (a.blogCount ?? -1)
+  const sorted = useMemo(
+    () => [...exhibitions].sort((a, b) => (b.blogCount ?? -1) - (a.blogCount ?? -1)),
+    [exhibitions]
   );
 
   return (

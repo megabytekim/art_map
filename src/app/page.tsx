@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Exhibition } from "@/lib/types";
 import ExhibitionPanel from "@/components/ExhibitionPanel";
@@ -15,7 +15,7 @@ export default function Home() {
   const [panelOpen, setPanelOpen] = useState(true);
 
   // 모바일: 목록에서 전시 선택 시 자동으로 지도 뷰로 전환
-  const handleSelect = (id: string) => {
+  const handleSelect = useCallback((id: string) => {
     if (id === "") {
       setSelectedId(null);
       return;
@@ -24,13 +24,14 @@ export default function Home() {
     if (window.innerWidth < 768) {
       setPanelOpen(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
         const res = await fetch("/api/exhibitions");
+        if (!res.ok) throw new Error("Failed to fetch");
         const data: Exhibition[] = await res.json();
         setExhibitions(data);
       } catch {

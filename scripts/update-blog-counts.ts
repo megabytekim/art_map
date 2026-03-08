@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { resolve, dirname } from "path";
+import { extractSearchTitle, buildQuery } from "../src/lib/search-utils";
 
 interface Exhibition {
   id: string;
@@ -19,58 +20,6 @@ interface Exhibition {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Extract the most searchable part of the title
-// e.g. "한국 근현대미술 : 붓으로 빚은 한국의 서정" → "붓으로 빚은 한국의 서정"
-// e.g. "《지구울림 - 헤르츠앤도우》" → "지구울림 - 헤르츠앤도우"
-function extractSearchTitle(title: string): string {
-  // Replace brackets with spaces, then collapse multiple spaces
-  let cleaned = title.replace(/[《》〈〉<>≪≫〔〕【】『』「」()]/g, " ").replace(/\s+/g, " ").trim();
-  // Remove common exhibition suffixes
-  cleaned = cleaned.replace(/\s+(개인전|단체전|특별전|기획전|상설전|소장품전|회고전|초대전|귀국전)$/, "").trim();
-  // Split on subtitle separators, but only if both parts are long enough
-  const separators = [" : ", ": ", ", ", " - "];
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const sep of separators) {
-      const idx = cleaned.indexOf(sep);
-      if (idx > 0) {
-        const before = cleaned.slice(0, idx).trim();
-        const after = cleaned.slice(idx + sep.length).trim();
-        const candidate = after.length >= before.length ? after : before;
-        // Don't split if result would be too short (4 chars or less)
-        if (candidate.length <= 4) continue;
-        cleaned = candidate;
-        changed = true;
-        break;
-      }
-    }
-  }
-  return cleaned;
-}
-
-// Build search query: wrap title in quotes, split mixed-language titles
-// e.g. "Finnegans Wake 다니엘 보이드" → "Finnegans Wake" "다니엘 보이드"
-function buildQuery(searchTitle: string, shortPlace: string): string {
-  // Check if title has both Latin and Korean characters
-  const hasLatin = /[a-zA-Z]{2,}/.test(searchTitle);
-  const hasKorean = /[가-힣]{2,}/.test(searchTitle);
-
-  let titlePart: string;
-  if (hasLatin && hasKorean) {
-    // Split at the boundary between Latin and Korean
-    const parts = searchTitle
-      .split(/(?<=[a-zA-Z])\s+(?=[가-힣])|(?<=[가-힣])\s+(?=[a-zA-Z])/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 1);
-    titlePart = parts.map((p) => `"${p}"`).join(" ");
-  } else {
-    titlePart = `"${searchTitle}"`;
-  }
-
-  return shortPlace ? `${titlePart} ${shortPlace}` : titlePart;
-}
 
 const RECENT_DAYS = 60;
 

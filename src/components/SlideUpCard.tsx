@@ -37,7 +37,7 @@ export default function SlideUpCard({ exhibition, onClose }: Props) {
       .then((data) => setBlogs(data.items || []))
       .catch(() => setBlogs([]))
       .finally(() => setLoadingBlogs(false));
-  }, [exhibition]);
+  }, [exhibition?.id]);
 
   if (!exhibition) return null;
 
