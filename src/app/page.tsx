@@ -16,6 +16,10 @@ export default function Home() {
 
   // 모바일: 목록에서 전시 선택 시 자동으로 지도 뷰로 전환
   const handleSelect = (id: string) => {
+    if (id === "") {
+      setSelectedId(null);
+      return;
+    }
     setSelectedId(id);
     if (window.innerWidth < 768) {
       setPanelOpen(false);

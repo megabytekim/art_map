@@ -47,3 +47,10 @@ export function getPopularityLabel(level: PopularityLevel): string {
       return "거의 없음 (0-9)";
   }
 }
+
+export function isEndingSoon(endDate: string, withinDays = 14): boolean {
+  const end = new Date(endDate);
+  const now = new Date();
+  const diff = end.getTime() - now.getTime();
+  return diff >= 0 && diff <= withinDays * 24 * 60 * 60 * 1000;
+}

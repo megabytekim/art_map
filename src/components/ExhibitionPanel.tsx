@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Exhibition, getPopularityLevel, getPopularityColor } from "@/lib/types";
+import { Exhibition, getPopularityLevel, getPopularityColor, isEndingSoon } from "@/lib/types";
 
 interface Props {
   exhibitions: Exhibition[];
@@ -65,6 +65,7 @@ export default function ExhibitionPanel({
             const level = getPopularityLevel(ex.blogCount);
             const color = getPopularityColor(level);
             const isSelected = ex.id === selectedId;
+            const endingSoon = isEndingSoon(ex.endDate);
 
             return (
               <button
@@ -81,6 +82,11 @@ export default function ExhibitionPanel({
                       {ex.title}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">{ex.place}</p>
+                    {endingSoon && (
+                      <span className="inline-block text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full mt-0.5">
+                        마감 임박
+                      </span>
+                    )}
                     <div className="flex items-center justify-between mt-1.5">
                       <p className="text-xs text-gray-400">
                         {ex.startDate} ~ {ex.endDate}
