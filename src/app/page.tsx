@@ -44,7 +44,7 @@ export default function Home() {
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0 z-10">
         <div>
           <h1 className="text-xl font-bold text-gray-900">무하한</h1>
-          <p className="text-xs text-gray-500">서울 전시 지도 + 블로그 인기도</p>
+          <p className="text-xs text-gray-500">서울 전시 지도 + 블로그 인기도 (최근 60일)</p>
         </div>
         <button
           onClick={() => setPanelOpen(!panelOpen)}

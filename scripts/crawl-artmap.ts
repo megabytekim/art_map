@@ -59,17 +59,21 @@ function buildQuery(searchTitle: string, shortPlace: string): string {
   return shortPlace ? `${titlePart} ${shortPlace}` : titlePart;
 }
 
-async function fetchBlogCount(title: string, place: string, retries = 3): Promise<number | null> {
-  const clientId = process.env.NAVER_CLIENT_ID;
-  const clientSecret = process.env.NAVER_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
+const RECENT_DAYS = 60;
 
-  const searchTitle = extractSearchTitle(title);
-  const shortPlace = place ? place.split(" ")[0] : "";
-  const query = buildQuery(searchTitle, shortPlace);
+async function fetchPage(
+  query: string,
+  start: number,
+  display: number,
+  clientId: string,
+  clientSecret: string,
+  retries = 3
+): Promise<{ items: { postdate: string }[]; total: number } | null> {
   const url = new URL("https://openapi.naver.com/v1/search/blog.json");
   url.searchParams.set("query", query);
-  url.searchParams.set("display", "1");
+  url.searchParams.set("display", String(display));
+  url.searchParams.set("start", String(start));
+  url.searchParams.set("sort", "date");
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -84,13 +88,59 @@ async function fetchBlogCount(title: string, place: string, retries = 3): Promis
         continue;
       }
       if (!res.ok) return null;
-      const data = await res.json();
-      return data.total ?? 0;
+      return await res.json();
     } catch {
       return null;
     }
   }
   return null;
+}
+
+function getCutoffDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - RECENT_DAYS);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}`;
+}
+
+async function fetchBlogCount(title: string, place: string): Promise<number | null> {
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  const searchTitle = extractSearchTitle(title);
+  const shortPlace = place ? place.split(" ")[0] : "";
+  const query = buildQuery(searchTitle, shortPlace);
+  const cutoff = getCutoffDate();
+
+  let count = 0;
+  let start = 1;
+  const pageSize = 100;
+
+  while (start <= 1000) {
+    const data = await fetchPage(query, start, pageSize, clientId, clientSecret);
+    if (!data || !data.items || data.items.length === 0) break;
+
+    let allWithinRange = true;
+    for (const item of data.items) {
+      if (item.postdate >= cutoff) {
+        count++;
+      } else {
+        allWithinRange = false;
+        break;
+      }
+    }
+
+    if (!allWithinRange) break;
+    if (data.items.length < pageSize) break;
+
+    start += pageSize;
+    await sleep(100);
+  }
+
+  return count;
 }
 
 async function main() {
