@@ -64,40 +64,61 @@ export default function SlideUpCard({ exhibition, onClose }: Props) {
 
         {/* Header - always visible */}
         <div className="px-4 pb-3">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-3">
+            {/* Representative image */}
+            {exhibition.imageUrl ? (
+              <img
+                src={exhibition.imageUrl}
+                alt={exhibition.title}
+                className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : null}
+
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-base text-gray-900 leading-snug line-clamp-1">
-                  {exhibition.title}
-                </h3>
-                {endingSoon && (
-                  <span className="text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                    마감 임박
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-xs text-gray-500">{exhibition.place}</p>
-                <p className="text-xs text-gray-400">
-                  {exhibition.startDate} ~ {exhibition.endDate}
-                </p>
-                {exhibition.blogCount !== null && (
-                  <span className="text-xs font-medium flex items-center gap-1" style={{ color }}>
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                    {exhibition.blogCount.toLocaleString()}건
-                  </span>
-                )}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-base text-gray-900 leading-snug line-clamp-1">
+                      {exhibition.title}
+                    </h3>
+                    {endingSoon && (
+                      <span className="text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                        마감 임박
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">{exhibition.place}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-xs text-gray-400">
+                      {exhibition.startDate} ~ {exhibition.endDate}
+                    </p>
+                    {exhibition.blogCount !== null && (
+                      <span className="text-xs font-medium flex items-center gap-1" style={{ color }}>
+                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                        {exhibition.blogCount.toLocaleString()}건
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
+
+          {/* Blog summary */}
+          {!expanded && blogs.length > 0 && (
+            <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+              {blogs[0].description}
+            </p>
+          )}
 
           {/* Expand toggle */}
           {!expanded && (

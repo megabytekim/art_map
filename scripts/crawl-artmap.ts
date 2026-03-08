@@ -13,6 +13,7 @@ interface RawExhibition {
   startDate: string;
   endDate: string;
   thumbnail: string;
+  imageUrl: string;
   blogCount: number | null;
 }
 
@@ -113,6 +114,38 @@ async function geocodeKeyword(keyword: string, retries = 2): Promise<{ lat: numb
     }
   }
   return null;
+}
+
+async function fetchImageUrl(title: string, place: string): Promise<string> {
+  const clientId = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return "";
+
+  const searchTitle = extractSearchTitle(title);
+  const shortPlace = place ? place.split(" ")[0] : "";
+  const query = buildQuery(searchTitle, shortPlace);
+
+  try {
+    const url = new URL("https://openapi.naver.com/v1/search/image.json");
+    url.searchParams.set("query", query);
+    url.searchParams.set("display", "1");
+    url.searchParams.set("sort", "sim");
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        "X-Naver-Client-Id": clientId,
+        "X-Naver-Client-Secret": clientSecret,
+      },
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    if (data.items && data.items.length > 0) {
+      return data.items[0].thumbnail || "";
+    }
+  } catch {
+    // ignore
+  }
+  return "";
 }
 
 const RECENT_DAYS = 60;
@@ -326,6 +359,7 @@ async function main() {
                 ? item.thumbnail
                 : `https://art-map.co.kr${item.thumbnail}`
               : "",
+            imageUrl: "",
             blogCount: null,
           } as RawExhibition;
         } catch (e) {
@@ -345,12 +379,17 @@ async function main() {
 
   await browser.close();
 
-  // 3. Fetch blog counts from Naver API (sequential to avoid 429)
-  console.log("\nFetching blog counts...");
+  // 3. Fetch blog counts + image URLs from Naver API (sequential to avoid 429)
+  console.log("\nFetching blog counts + images...");
   for (let i = 0; i < results.length; i++) {
-    results[i].blogCount = await fetchBlogCount(results[i].title, results[i].place);
+    const [blogCount, imageUrl] = await Promise.all([
+      fetchBlogCount(results[i].title, results[i].place),
+      fetchImageUrl(results[i].title, results[i].place),
+    ]);
+    results[i].blogCount = blogCount;
+    results[i].imageUrl = imageUrl;
     if ((i + 1) % 10 === 0 || i === results.length - 1) {
-      console.log(`  Blog counts: ${i + 1}/${results.length}`);
+      console.log(`  Progress: ${i + 1}/${results.length}`);
     }
     await sleep(100);
   }

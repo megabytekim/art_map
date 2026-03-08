@@ -12,6 +12,7 @@ interface RawExhibition {
   startDate: string;
   endDate: string;
   thumbnail: string;
+  imageUrl?: string;
   blogCount: number | null;
 }
 
@@ -22,6 +23,7 @@ export async function GET() {
     .filter((item) => !item.endDate || item.endDate >= today)
     .map((item) => ({
       ...item,
+      imageUrl: item.imageUrl || "",
       category: "전시",
     }));
 
